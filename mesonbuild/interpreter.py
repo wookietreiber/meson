@@ -1043,6 +1043,9 @@ ModuleState = namedtuple('ModuleState', [
     'man', 'global_args', 'project_args', 'build_machine', 'host_machine',
     'target_machine'])
 
+class DisablerHolder(InterpreterObject):
+    pass
+
 class ModuleHolder(InterpreterObject):
     def __init__(self, modname, module, interpreter):
         InterpreterObject.__init__(self)
@@ -2056,8 +2059,32 @@ class Interpreter(InterpreterBase):
                     break
         return identifier, cached_dep
 
+    def is_disabled(self, args, kwargs):
+        for i in args:
+            if isinstance(i, DisablerHolder):
+                return True
+        for i in kwargs.values():
+            if isinstance(i, DisablerHolder):
+                return True
+            if isinstance(i, list):
+                for j in i:
+                    if isinstance(j, DisablerHolder):
+                        return True
+        return False
+
     def func_dependency(self, node, args, kwargs):
         self.validate_arguments(args, 1, [str])
+        if 'required' in kwargs and 'option' in kwargs:
+            raise InterpreterException('Can only use "required" or "option", not both at the same time.')
+        required = kwargs.get('required', 'options' not in kwargs)
+        for oname in listify(kwargs.get('options', [])):
+            o = self.environment.coredata.user_options[oname]
+            if not isinstance(o, coredata.UserDolphinOption):
+                raise InterpreterException('Value of option must point to a Dolphin object.')
+            if o.value == 'disabled':
+                return DisablerHolder()
+            if o.value == 'required':
+                required = True
         name = args[0]
         if '<' in name or '>' in name or '=' in name:
             raise InvalidArguments('Characters <, > and = are forbidden in dependency names. To specify'
@@ -2065,7 +2092,7 @@ class Interpreter(InterpreterBase):
         identifier, cached_dep = self._find_cached_dep(name, kwargs)
 
         if cached_dep:
-            if kwargs.get('required', True) and not cached_dep.found():
+            if required and not cached_dep.found():
                 m = 'Dependency {!r} was already checked and was not found'
                 raise DependencyException(m.format(name))
             dep = cached_dep
@@ -2320,6 +2347,8 @@ class Interpreter(InterpreterBase):
 
     @permittedKwargs(permitted_kwargs['test'])
     def func_test(self, node, args, kwargs):
+        if self.is_disabled(args, kwargs):
+            return DisablerHolder()
         self.add_test(node, args, kwargs, True)
 
     def unpack_env_kwarg(self, kwargs):
@@ -2797,6 +2826,8 @@ different subdirectory.
             self.coredata.target_guids[idname] = str(uuid.uuid4()).upper()
 
     def build_target(self, node, args, kwargs, targetholder):
+        if self.is_disabled(args, kwargs):
+            return DisablerHolder()
         if not args:
             raise InterpreterException('Target does not have a name.')
         name = args[0]
