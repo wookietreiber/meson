@@ -717,6 +717,26 @@ def unholder_array(entries):
         result.append(e)
     return result
 
+
+def detect_subprojects(spdir_name, current_dir='', result=None):
+    if result is None:
+        result = {}
+    spdir = os.path.join(current_dir, spdir_name)
+    if not os.path.exists(spdir):
+        return result
+    for trial in glob(os.path.join(spdir, '*')):
+        basename = os.path.split(trial)[1]
+        if trial == 'packagecache':
+            continue
+        if not os.path.isdir(trial):
+            continue
+        if basename in result:
+            result[basename].append(trial)
+        else:
+            result[basename] = [trial]
+        detect_subprojects(spdir_name, trial, result)
+    return result
+
 class OrderedSet(collections.MutableSet):
     """A set that preserves the order in which items are added, by first
     insertion.
