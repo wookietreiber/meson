@@ -18,3 +18,7 @@ gs = custom_target('somec',
 
 test('Generated test', executable('proggie', gs))
 
+if not meson.is_cross_build() and find_program('pkg-config', required:false).found()
+  subdir('deplookups')
+endif
+
