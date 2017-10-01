@@ -1043,7 +1043,7 @@ ModuleState = namedtuple('ModuleState', [
     'man', 'global_args', 'project_args', 'build_machine', 'host_machine',
     'target_machine'])
 
-class DisablerHolder(InterpreterObject):
+class Disabler(InterpreterObject):
     def __init__(self):
         super().__init__()
         self.methods.update({'found': self.found_method})
@@ -1060,7 +1060,7 @@ class ModuleHolder(InterpreterObject):
 
     def method_call(self, method_name, args, kwargs):
         if is_disabled(args, kwargs):
-            return DisablerHolder()
+            return Disabler()
         try:
             fn = getattr(self.held_object, method_name)
         except AttributeError:
@@ -1350,14 +1350,14 @@ permitted_kwargs = {'add_global_arguments': {'language'},
 
 def is_disabled(args, kwargs):
     for i in args:
-        if isinstance(i, DisablerHolder):
+        if isinstance(i, Disabler):
             return True
     for i in kwargs.values():
-        if isinstance(i, DisablerHolder):
+        if isinstance(i, Disabler):
             return True
         if isinstance(i, list):
             for j in i:
-                if isinstance(j, DisablerHolder):
+                if isinstance(j, Disabler):
                     return True
     return False
 
@@ -1559,7 +1559,7 @@ class Interpreter(InterpreterBase):
     def func_declare_dependency(self, node, args, kwargs):
         version = kwargs.get('version', self.project_version)
         if is_disabled(args, kwargs):
-            return DisableHolder()
+            return Disabler()
         if not isinstance(version, str):
             raise InterpreterException('Version must be a string.')
         incs = extract_as_list(kwargs, 'include_directories')
@@ -2084,15 +2084,15 @@ class Interpreter(InterpreterBase):
 
     def func_dependency(self, node, args, kwargs):
         self.validate_arguments(args, 1, [str])
-        if 'required' in kwargs and 'option' in kwargs:
-            raise InterpreterException('Can only use "required" or "option", not both at the same time.')
+        if 'required' in kwargs and 'options' in kwargs:
+            raise InterpreterException('Can only use "required" or "options", not both at the same time.')
         required = kwargs.get('required', 'options' not in kwargs)
         for oname in listify(kwargs.get('options', [])):
             o = self.environment.coredata.user_options[oname]
             if not isinstance(o, coredata.UserDolphinOption):
                 raise InterpreterException('Value of option must point to a Dolphin object.')
             if o.value == 'disabled':
-                return DisablerHolder()
+                return Disabler()
             if o.value == 'required':
                 required = True
         name = args[0]
@@ -2358,7 +2358,7 @@ class Interpreter(InterpreterBase):
     @permittedKwargs(permitted_kwargs['test'])
     def func_test(self, node, args, kwargs):
         if is_disabled(args, kwargs):
-            return DisablerHolder()
+            return Disabler()
         self.add_test(node, args, kwargs, True)
 
     def unpack_env_kwarg(self, kwargs):
@@ -2842,7 +2842,7 @@ different subdirectory.
 
     def build_target(self, node, args, kwargs, targetholder):
         if is_disabled(args, kwargs):
-            return DisablerHolder()
+            return Disabler()
         if not args:
             raise InterpreterException('Target does not have a name.')
         name = args[0]
