@@ -27,7 +27,7 @@ from .dependencies import InternalDependency, Dependency, DependencyException
 from .interpreterbase import InterpreterBase
 from .interpreterbase import check_stringlist, noPosargs, noKwargs, stringArgs, permittedKwargs
 from .interpreterbase import InterpreterException, InvalidArguments, InvalidCode
-from .interpreterbase import InterpreterObject, MutableInterpreterObject
+from .interpreterbase import InterpreterObject, MutableInterpreterObject, Disabler
 from .modules import ModuleReturnValue
 
 import os, sys, shutil, uuid
@@ -1043,14 +1043,6 @@ ModuleState = namedtuple('ModuleState', [
     'man', 'global_args', 'project_args', 'build_machine', 'host_machine',
     'target_machine'])
 
-class Disabler(InterpreterObject):
-    def __init__(self):
-        super().__init__()
-        self.methods.update({'found': self.found_method})
-
-    def found_method(self, args, kwargs):
-        return False
-
 class ModuleHolder(InterpreterObject):
     def __init__(self, modname, module, interpreter):
         InterpreterObject.__init__(self)
@@ -1059,8 +1051,6 @@ class ModuleHolder(InterpreterObject):
         self.interpreter = interpreter
 
     def method_call(self, method_name, args, kwargs):
-        if is_disabled(args, kwargs):
-            return Disabler()
         try:
             fn = getattr(self.held_object, method_name)
         except AttributeError:
@@ -1348,19 +1338,6 @@ permitted_kwargs = {'add_global_arguments': {'language'},
                     'vcs_tag': {'input', 'output', 'fallback', 'command', 'replace_string'},
                     }
 
-def is_disabled(args, kwargs):
-    for i in args:
-        if isinstance(i, Disabler):
-            return True
-    for i in kwargs.values():
-        if isinstance(i, Disabler):
-            return True
-        if isinstance(i, list):
-            for j in i:
-                if isinstance(j, Disabler):
-                    return True
-    return False
-
 
 class Interpreter(InterpreterBase):
 
@@ -1558,8 +1535,6 @@ class Interpreter(InterpreterBase):
     @noPosargs
     def func_declare_dependency(self, node, args, kwargs):
         version = kwargs.get('version', self.project_version)
-        if is_disabled(args, kwargs):
-            return Disabler()
         if not isinstance(version, str):
             raise InterpreterException('Version must be a string.')
         incs = extract_as_list(kwargs, 'include_directories')
@@ -2357,8 +2332,6 @@ class Interpreter(InterpreterBase):
 
     @permittedKwargs(permitted_kwargs['test'])
     def func_test(self, node, args, kwargs):
-        if is_disabled(args, kwargs):
-            return Disabler()
         self.add_test(node, args, kwargs, True)
 
     def unpack_env_kwarg(self, kwargs):
@@ -2841,8 +2814,6 @@ different subdirectory.
             self.coredata.target_guids[idname] = str(uuid.uuid4()).upper()
 
     def build_target(self, node, args, kwargs, targetholder):
-        if is_disabled(args, kwargs):
-            return Disabler()
         if not args:
             raise InterpreterException('Target does not have a name.')
         name = args[0]

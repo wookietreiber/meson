@@ -10,3 +10,11 @@ test('enc test', exe)
 subdir('nogo', if_found : x264_dep)
 subdir('nogo', if_found : unfound_dep)
 
+gs = custom_target('somec',
+  input : 'proggie.c.in',
+  output : 'proggie.c',
+  command : [exe, '@INPUT@', '@OUTPUT@'],
+  )
+
+test('Generated test', executable('proggie', gs))
+
